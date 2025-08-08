@@ -1,8 +1,8 @@
 <?php
-$host = 'your-db-host';
-$db   = 'risasi-users';
-$user = 'your-db-user';
-$pass = 'your-db-password';
+$host = getenv('DB_HOST');
+$db   = getenv('DB_NAME');
+$user = getenv('DB_USER');
+$pass = getenv('DB_PASSWORD');
 $charset = 'utf8mb4';
 
 $dsn = "pgsql:host=$host;dbname=$db;options='--client_encoding=$charset'";
@@ -11,13 +11,30 @@ $options = [
     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 ];
 
-$pdo = new PDO($dsn, $user, $pass, $options);
+try {
+    $pdo = new PDO($dsn, $user, $pass, $options);
+} catch (PDOException $e) {
+    die("Database connection failed: " . $e->getMessage());
+}
 
-$code = $_POST['code'];
-$newPassword = password_hash($_POST['new_password'], PASSWORD_DEFAULT);
+// Validate inputs
+$code = $_POST['code'] ?? '';
+$newPasswordRaw = $_POST['new_password'] ?? '';
 
-$stmt = $pdo->prepare("UPDATE users SET password = ?, reset_code = NULL WHERE reset_code = ?");
+if (empty($code) || empty($newPasswordRaw)) {
+    die("Missing reset code or new password.");
+}
+
+// Hash the new password
+$newPassword = password_hash($newPasswordRaw, PASSWORD_DEFAULT);
+
+// Update password and clear reset code
+$stmt = $pdo->prepare("UPDATE users SET password = $1, reset_code = NULL WHERE reset_code = $2");
 $stmt->execute([$newPassword, $code]);
 
-echo "Password updated successfully!";
+if ($stmt->rowCount() > 0) {
+    echo "✅ Password updated successfully!";
+} else {
+    echo "❌ Invalid or expired reset code.";
+}
 ?>
